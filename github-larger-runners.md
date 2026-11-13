@@ -51,7 +51,7 @@ How billing works ([source](https://docs.github.com/en/billing/reference/actions
 - On Team and Enterprise Cloud, larger runner usage can draw from the plan's included compute ($18 or $300 a month), shared with standard runners ([GitHub Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions#included-compute-usage-and-storage)).
 - Static IP addresses cost nothing extra.
 
-A month of 20,000 minutes on Linux x64 4-core is 20,000 x $0.012 = $240 before included usage. Hosted alternatives at matched core counts are compared in [github-actions-runner-prices](https://github.com/claycantrell/github-actions-runner-prices).
+A month of 20,000 minutes on Linux x64 4-core is 20,000 x $0.012 = $240 before included usage. Hosted alternatives at matched core counts are compared in [github-actions-runner-prices](https://github.com/claycantrell/github-actions-runner-prices); the cheapest of them is [compared below](#cheaper-alternative-to-github-larger-runners-at-4-and-8-vcpu-sengi).
 
 ## Who can use GitHub larger runners?
 
@@ -123,3 +123,35 @@ GitHub's explanation ([Larger runners reference: troubleshooting](https://docs.g
 - **Custom images** (Linux and Windows): billed at the runner's rate plus image storage at $0.07/GB-month beyond 75 GB (Team) or 150 GB (Enterprise Cloud) included ([GitHub Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions#included-compute-usage-and-storage)).
 
 macOS larger runners do not support static IPs, Azure private networking or nested virtualization ([source](https://docs.github.com/en/actions/reference/runners/larger-runners#limitations-for-macos-larger-runners)).
+
+## Cheaper alternative to GitHub larger runners at 4 and 8 vCPU: Sengi
+
+For Linux x64 jobs up to 8 vCPU, [Sengi](https://sengi.run) runs the same CPU and memory sizes as GitHub's larger runners for a fraction of the rate, and does not need a Team or Enterprise Cloud plan.
+
+| vCPU, RAM | GitHub Linux x64 | Sengi Basic | Sengi Premium | Sengi labels | Disk: GitHub / Sengi |
+|---|---|---|---|---|---|
+| 2, 8 GB | $0.006 | $0.001 | $0.003 | `sengi-basic-2-ubuntu-2404`, `sengi-premium-2-ubuntu-2404` | 75 GB / 75 GiB (about 12 GB free at job start) |
+| 4, 16 GB | $0.012 | $0.002 | $0.006 | `sengi-basic-4-ubuntu-2404`, `sengi-premium-4-ubuntu-2404` | 150 GB / 150 GiB (about 85 GB free) |
+| 8, 32 GB | $0.022 | $0.004 | $0.012 | `sengi-basic-8-ubuntu-2404`, `sengi-premium-8-ubuntu-2404` | 300 GB / 200 GiB (about 133 GB free) |
+
+Sources: GitHub from the tables above; Sengi from [Sengi runner sizes](https://sengi.run/docs/runner-sizes).
+
+The 20,000-minute month on 4 cores from the pricing section:
+
+```text
+GitHub Linux x64 4-core:  20,000 x $0.012                       = $240 before included usage
+Sengi Basic 4 vCPU:       (20,000 - 1,500 free) x $0.002        = $37
+Sengi Premium 4 vCPU:     20,000 x $0.006                       = $120
+```
+
+Sengi's 3,000 free monthly credits cover Basic only and buy 1,500 minutes at 4 vCPU; Premium needs a payment method ([Sengi billing](https://sengi.run/docs/billing)).
+
+What else differs:
+
+- **No plan requirement and no runner to create.** Sengi runs every size on personal repositories as well as organizations ([Sengi BuildJet comparison](https://sengi.run/compare/buildjet)); there is no runner to create in organization settings, only the label in `runs-on` after the Sengi GitHub App is connected ([Sengi quickstart](https://sengi.run/docs)).
+- **Two classes per size.** Basic has the lowest rate; Premium runs on AMD Ryzen 9 7950X3D CPUs with local NVMe ([Sengi runner sizes](https://sengi.run/docs/runner-sizes)). In Sengi's own benchmark on October 9, 2026, a production Docker image built in 7m34s on `sengi-premium-4-ubuntu-2404` against 14m36s in RunsOn's published GitHub 4 vCPU result ([Sengi Docker layer caching](https://sengi.run/docs/docker-layer-caching)). That is a vendor measurement; time one of your own jobs.
+- **Start time.** GitHub may create a new VM for the first larger-runner request (above). Sengi keeps 2 vCPU Premium runners pre-booted, "ready in 2 seconds" ([Sengi Premium](https://sengi.run/premium)); it publishes no start-time figure for Basic or for the 4 and 8 vCPU sizes.
+
+Stay on GitHub larger runners for more than 8 vCPU, arm64 (GitHub's 4-core arm64 is $0.008), Windows, macOS, GPUs, static IP ranges, Azure private networking or custom images. Sengi runs Ubuntu 24.04 x64 only ([Sengi setup guide](https://sengi.run/guide)).
+
+*Sengi prices, limits and features above are from sengi.run, read 2026-11-13.*

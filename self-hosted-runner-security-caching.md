@@ -135,6 +135,64 @@ Two cautions:
 
 kaniko built images from a Dockerfile inside a container or Kubernetes pod without a Docker daemon, and cached layers in a registry with `--cache=true` and `--cache-repo` ([kaniko README](https://github.com/GoogleContainerTools/kaniko#readme)). The [GoogleContainerTools/kaniko](https://github.com/GoogleContainerTools/kaniko) repository is now **archived**; its README says it is "archived and no longer developed or maintained" (last push June 2025). For daemonless builds on ARC, the ARC docs describe Docker-in-Docker and Kubernetes container modes ([Deploying runner scale sets](https://docs.github.com/en/actions/how-tos/manage-runners/use-actions-runner-controller/deploy-runner-scale-sets#using-docker-in-docker-or-kubernetes-mode-for-containers)).
 
+## Hosted runners with a fresh VM per job: Sengi's isolation model
+
+Most of the hardening above exists because a self-hosted machine persists between jobs. A hosted service that gives every job its own VM removes that problem without the runner groups, ephemeral registration and cleanup you would otherwise build. [Sengi](https://sengi.run) describes its model as follows ([Sengi security](https://sengi.run/docs/security)):
+
+| Risk from the sections above | Sengi |
+|---|---|
+| Persistent compromise; data left for the next job | Each job gets a fresh virtual machine, destroyed when the job ends; "nothing on it carries into another job, yours or anyone else's" |
+| Jobs reading each other's processes, network or disk | Each machine has its own network namespace and interface, an encrypted disk, and its own CPU, memory and I/O limits |
+| Credentials on the machine | No Sengi API token, cache credential or management access reaches a runner; Sengi treats every job as untrusted |
+| What reaches the machine from outside | Inbound access is limited to Sengi's own control plane |
+| Secrets and tokens stored by the provider | Secrets, environment variables, workflow outputs, your GitHub OAuth token and installation access tokens are never stored by Sengi; workflows, secrets and logs stay in GitHub |
+| Which repositories can use the runners | The Sengi GitHub App can be installed on **Only select repositories**; a repository's jobs run only after it is connected to a project, and **Stop new Sengi jobs** turns a repository off |
+
+What stays your job on Sengi, as on any runner: GitHub's rules for fork pull requests and `pull_request_target`, least-privilege `permissions:`, and OIDC instead of long-lived cloud keys all still apply, because they are about what the workflow is given, not where it runs. Sengi's docs make no separate statement about public repositories; standard GitHub-hosted runners are free there anyway.
+
+Switching a job is the `runs-on` line, after the repository is connected ([Sengi quickstart](https://sengi.run/docs)):
+
+```yaml
+jobs:
+  test:
+    runs-on: sengi-basic-2-ubuntu-2404   # $0.001/min, 2 vCPU, 8 GB, Ubuntu 24.04 x64
+```
+
+## Caching and Docker layer caching on Sengi
+
+Ephemeral runners normally lose the local BuildKit cache, which is why the exported backends above exist. On Sengi, `actions/cache`, the setup actions' built-in caches and Docker's `type=gha` cache are served from Sengi's own cache, with no workflow changes and no added charge ([Sengi caching](https://sengi.run/docs/caching)):
+
+| | GitHub's Actions cache | Sengi |
+|---|---|---|
+| Where it is stored | GitHub's cache service | Sengi's own cache, per repository |
+| Size and price | 10 GB per repository by default, then $0.07 per GB-month | Included in the minute price; Sengi does not publish the per-repository storage limit ([Sengi caching](https://sengi.run/docs/caching)) |
+| Eviction | Entries unused for 7 days | Entries no job has read for 7 days; at the storage limit the oldest go first |
+| Cache keys | `runner.os`, `runner.arch` | Read `Linux` and `X64`, so keys keep the same shape ([Sengi caching](https://sengi.run/docs/caching)) |
+| First run | Warm if the repository already has entries | Cold: the first job on Sengi fills Sengi's cache |
+
+The `type=gha` workflow from above works unchanged; only `runs-on` changes. From [Sengi Docker builds](https://sengi.run/docs/docker):
+
+```yaml
+jobs:
+  image:
+    runs-on: sengi-basic-4-ubuntu-2404
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+```
+
+Docker, Docker Compose and Buildx are installed on every Sengi runner, and job `services:` containers work over mapped ports as on GitHub's runners ([Sengi Docker builds](https://sengi.run/docs/docker)). Sengi suggests a per-branch `scope=` on both cache settings so branches stop replacing each other's layers ([Sengi Docker layer caching](https://sengi.run/docs/docker-layer-caching)); its own measurement there, on Premium, took a warm build step from 68 s to 36 s.
+
+Two cautions from Sengi's docs: a cache holds whatever the workflow puts in it, so keep secrets out of cache paths ([Sengi security](https://sengi.run/docs/security)); and `astral-sh/setup-uv` only caches on GitHub-hosted runners by default, so set `enable-cache: true` and use `astral-sh/setup-uv@v10.3.2` or later ([Sengi setup guide](https://sengi.run/guide)).
+
+*Sengi prices, limits and features above are from sengi.run, read 2026-11-13.*
+
 ## Related
 
 - [Autoscaling self-hosted runners with ARC](github-actions-runner-autoscaling-arc.md)

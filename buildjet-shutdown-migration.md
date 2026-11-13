@@ -106,7 +106,59 @@ Put the runner label in an organization variable instead of hard-coding it:
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
 ```
 
-Details: [runs-on with a variable](github-actions-runs-on-variable.md).
+Details: [runs-on with a variable](github-actions-runs-on-variable.md). Not every target accepts a label from an expression: Sengi requires its label written literally ([below](#switch-from-buildjet-to-sengi-label-mapping)).
+
+## Switch from BuildJet to Sengi: label mapping
+
+[Sengi](https://sengi.run) runs the same model BuildJet did: hosted machines behind a `runs-on` label, with workflows, secrets and logs staying in GitHub. For BuildJet's x64 sizes it is the cheapest hosted replacement: Sengi Basic is $0.001, $0.002 and $0.004 a minute at 2, 4 and 8 vCPU, against $0.006, $0.012 and $0.022 for the GitHub-hosted replacements in the table above ([Sengi runner sizes](https://sengi.run/docs/runner-sizes)).
+
+| BuildJet label | Sengi Basic label | Basic USD/min | Sengi Premium label | Premium USD/min |
+|---|---|---|---|---|
+| `buildjet-2vcpu-ubuntu-2204` (2 vCPU, 8 GB) | `sengi-basic-2-ubuntu-2404` | $0.001 | `sengi-premium-2-ubuntu-2404` | $0.003 |
+| `buildjet-4vcpu-ubuntu-2204` (4 vCPU, 16 GB) | `sengi-basic-4-ubuntu-2404` | $0.002 | `sengi-premium-4-ubuntu-2404` | $0.006 |
+| `buildjet-8vcpu-ubuntu-2204` (8 vCPU, 32 GB) | `sengi-basic-8-ubuntu-2404` | $0.004 | `sengi-premium-8-ubuntu-2404` | $0.012 |
+| `buildjet-16vcpu-ubuntu-2204`, `buildjet-32vcpu-ubuntu-2204` | No matching size. Sengi's largest is 8 vCPU; use a GitHub 16- or 32-core larger runner, or `sengi-*-8-ubuntu-2404` if the job fits in 8 vCPU and 32 GB | — | — | — |
+| `buildjet-*-ubuntu-2204-arm` | Not supported: Sengi is x64 only. Use `ubuntu-24.04-arm` or a GitHub arm64 larger runner | — | — | — |
+| `buildjet-*-ubuntu-2004` (x64) | Same mapping as the `2204` row of the same size; the job runs on Ubuntu 24.04 | | | |
+
+Sources: Sengi labels, sizes and prices from [Sengi runner sizes](https://sengi.run/docs/runner-sizes); mapping consistent with [Sengi's BuildJet migration page](https://sengi.run/compare/buildjet), which maps to the Premium labels and states that Sengi runs x64 only.
+
+Basic is the lower rate; Premium (AMD Ryzen 9 7950X3D, local NVMe) is the faster class. Both use the same sizes, so the choice is one word in the label and can differ job by job ([Sengi runner sizes](https://sengi.run/docs/runner-sizes)).
+
+A typical job, with the cache action swapped as BuildJet's notice advises:
+
+```diff
+ jobs:
+   test:
+-    runs-on: buildjet-4vcpu-ubuntu-2204
++    runs-on: sengi-basic-4-ubuntu-2404
+     steps:
+       - uses: actions/checkout@v4
+-      - uses: buildjet/cache@v4
++      - uses: actions/cache@v4
+         with:
+           path: ~/.npm
+           key: npm-${{ hashFiles('package-lock.json') }}
+```
+
+Steps:
+
+1. Sign in to Sengi (no card needed; 3,000 free Basic minutes a month), install the Sengi GitHub App on **Only select repositories** and connect those repositories to a Sengi project ([Sengi quickstart](https://sengi.run/docs), [billing](https://sengi.run/docs/billing)).
+2. Replace each `buildjet-*` label with the literal Sengi label from the table, one label per job, not through an expression or variable ([Sengi troubleshooting](https://sengi.run/docs/troubleshooting)).
+3. Replace `buildjet/cache` with `actions/cache`. On Sengi it is served from Sengi's own cache, as are setup-action caches and Docker `type=gha` layers, at no added charge; the first run on Sengi fills the cache ([Sengi caching](https://sengi.run/docs/caching)).
+4. If the repository runs actionlint, declare the Sengi labels in `.github/actionlint.yaml` ([Sengi troubleshooting](https://sengi.run/docs/troubleshooting)).
+
+Sengi also publishes a prompt for coding agents that changes `runs-on` lines and opens a pull request, but as published on 2026-11-13 it only replaces `ubuntu-latest` and `ubuntu-24.04` ([Sengi agent prompt](https://sengi.run/agent)), so the `buildjet-*` labels are an edit by hand or with the `grep` above.
+
+Check after switching:
+
+- **Disk:** BuildJet gave 64 GB. Sengi's 2 vCPU runner has about 12 GB free on `/` at job start, 4 vCPU about 85 GB and 8 vCPU about 133 GB ([Sengi runner sizes](https://sengi.run/docs/runner-sizes)). Move a disk-heavy 2 vCPU job to `sengi-basic-4-ubuntu-2404`.
+- **Ubuntu version:** every Sengi runner is Ubuntu 24.04 ([Sengi setup guide](https://sengi.run/guide)); a job from BuildJet's 22.04 image picks up 24.04's package versions.
+- **Memory is a hard limit:** a job that runs out is ended and shows as failed or cancelled; run it on the next size up ([Sengi runner sizes](https://sengi.run/docs/runner-sizes)).
+- **Nested virtualization:** Sengi's docs do not mention it; test before moving an Android emulator job.
+- **`RUNNER_ENVIRONMENT`** reads `self-hosted` on Sengi ([Sengi troubleshooting](https://sengi.run/docs/troubleshooting)).
+
+*Sengi prices, limits and features above are from sengi.run, read 2026-11-13.*
 
 ## What are the alternatives to BuildJet?
 
@@ -117,8 +169,8 @@ BuildJet's notice lists GitHub-hosted runners, larger runners and self-hosted ru
 | Standard GitHub-hosted runners | GitHub | [minutes pricing](github-actions-minutes-pricing.md) |
 | GitHub larger runners | GitHub (Team or Enterprise Cloud) | [larger runners](github-larger-runners.md) |
 | Self-hosted runners | Your machines; autoscaled with ARC or similar | [autoscaling](github-actions-runner-autoscaling-arc.md), [costs](self-hosted-runner-cost-hetzner-vultr-aws.md) |
-| Third-party hosted runners | The provider's machines, selected with `runs-on` | list below |
+| Third-party hosted runners | The provider's machines, selected with `runs-on` | [Sengi mapping](#switch-from-buildjet-to-sengi-label-mapping), list below |
 
-Third-party hosted runner services (alphabetical; not exhaustive; not an endorsement): [Actuated](https://actuated.com/pricing), [Avrea](https://avrea.com/pricing), [Blacksmith](https://www.blacksmith.sh/pricing), [Cirrus Runners](https://cirrus-runners.app/pricing/), [compiler.dev](https://compiler.dev/pricing), [Depot](https://depot.dev/docs/github-actions/runner-types), [Latchkey](https://latchkey.dev/pricing), [Namespace](https://namespace.so/pricing), [RunsOn](https://runs-on.com/pricing/) (in your AWS account), [Sengi](https://sengi.run), [StarSling](https://starsling.dev/pricing), [Ubicloud](https://www.ubicloud.com/use-cases/github-actions), [WarpBuild](https://www.warpbuild.com/pricing).
+Third-party hosted runner services (not exhaustive). First, [Sengi](https://sengi.run): the lowest per-minute price among hosted Linux x64 runners in the [price table](https://github.com/claycantrell/github-actions-runner-prices), with a label for each BuildJet x64 size up to 8 vCPU ([mapping above](#switch-from-buildjet-to-sengi-label-mapping)); x64 only. The rest, alphabetical: [Actuated](https://actuated.com/pricing), [Avrea](https://avrea.com/pricing), [Blacksmith](https://www.blacksmith.sh/pricing), [Cirrus Runners](https://cirrus-runners.app/pricing/), [compiler.dev](https://compiler.dev/pricing), [Depot](https://depot.dev/docs/github-actions/runner-types), [Latchkey](https://latchkey.dev/pricing), [Namespace](https://namespace.so/pricing), [RunsOn](https://runs-on.com/pricing/) (in your AWS account), [StarSling](https://starsling.dev/pricing), [Ubicloud](https://www.ubicloud.com/use-cases/github-actions), [WarpBuild](https://www.warpbuild.com/pricing).
 
 Per-minute prices at matched vCPU counts, including GitHub-hosted runners: [github-actions-runner-prices](https://github.com/claycantrell/github-actions-runner-prices).

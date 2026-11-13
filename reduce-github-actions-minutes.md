@@ -155,8 +155,44 @@ Within GitHub-hosted runners ([Actions runner pricing](https://docs.github.com/e
 
 Caching dependencies (`actions/cache`) shortens jobs; the cache is 10 GB per repository by default and entries unused for 7 days are removed ([Dependency caching reference](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching#usage-limits-and-eviction-policy)).
 
-Outside GitHub-hosted runners, the options are self-hosted runners (no per-minute charge from GitHub today; see [platform charge](github-self-hosted-runner-platform-charge.md)) and third-party hosted runners, compared in [github-actions-runner-prices](https://github.com/claycantrell/github-actions-runner-prices).
+Outside GitHub-hosted runners, the options are self-hosted runners (no per-minute charge from GitHub today; see [platform charge](github-self-hosted-runner-platform-charge.md)) and third-party hosted runners, compared in [github-actions-runner-prices](https://github.com/claycantrell/github-actions-runner-prices). The cheapest hosted Linux x64 option there is covered [below](#the-other-half-of-the-bill-is-the-price-per-minute-switch-linux-jobs-to-sengi-basic).
 
 ## Find what to fix first
 
 Group **Billing & Licensing → Usage** by repository and SKU, or use the organization's Actions usage metrics to rank workflows by minutes ([GitHub Actions minutes pricing: viewing usage](github-actions-minutes-pricing.md#how-do-i-see-github-actions-minutes-usage)).
+
+## The other half of the bill is the price per minute: switch Linux jobs to Sengi Basic
+
+Every setting above cuts minutes. The bill is minutes times the rate, and for Linux x64 jobs the rate is the larger lever: $0.006 a minute on GitHub's `ubuntu-latest`, $0.001 on [Sengi](https://sengi.run) Basic for the same 2 vCPU and 8 GB ([Actions runner pricing](https://docs.github.com/en/billing/reference/actions-runner-pricing), [Sengi runner sizes](https://sengi.run/docs/runner-sizes)). After installing the Sengi GitHub App and connecting the repository, the switch is the `runs-on` line; the minute-saving settings stay as they are ([Sengi quickstart](https://sengi.run/docs)):
+
+```yaml
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: sengi-basic-2-ubuntu-2404
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - run: make test
+```
+
+Worked example, on the same assumptions as the [self-hosting example](self-hosted-runner-cost-hetzner-vultr-aws.md#worked-monthly-example) (a GitHub Team organization, 20,000 Linux minutes a month in private repositories, 2 vCPU jobs):
+
+| Runner | Calculation | Monthly cost |
+|---|---|---|
+| GitHub-hosted `ubuntu-latest` | 20,000 x $0.006 = $120, minus $18 included | $102 |
+| Sengi Basic, `sengi-basic-2-ubuntu-2404` | (20,000 - 3,000 free) x $0.001 | $17 |
+
+Every minute the settings above remove saves a sixth as much on Sengi Basic as on GitHub, so cut the waste first and then change the rate. The counting rules match: Sengi meters the time GitHub reports between a job starting and finishing, rounds it up to a whole minute once per job, does not bill queueing, machine start-up or cleanup, and credits a job in full if a fault on Sengi's side ends it ([Sengi billing](https://sengi.run/docs/billing)).
+
+Limits to check before moving a job:
+
+- Sengi runs Ubuntu 24.04 x64 only, at 2, 4 or 8 vCPU. Leave Windows, macOS, arm64 and Ubuntu 22.04 jobs on their current runners ([Sengi setup guide](https://sengi.run/guide)).
+- Public repositories already run standard GitHub-hosted runners for free.
+- On free minutes a Sengi job can run for up to 2 hours; a card on file removes that limit ([Sengi billing](https://sengi.run/docs/billing)).
+- Write the Sengi label literally in `runs-on`, one label per job, not through an expression ([Sengi troubleshooting](https://sengi.run/docs/troubleshooting)).
+
+*Sengi prices, limits and features above are from sengi.run, read 2026-11-13.*

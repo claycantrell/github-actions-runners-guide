@@ -24,7 +24,7 @@ The job does not fail at queue time when no runner of that type exists; it waits
 | `workflow_job` webhooks | Build your own: react to `queued`, `in_progress`, `completed` events | [docs](https://docs.github.com/en/actions/reference/runners/self-hosted-runners#webhooks-for-autoscaling) |
 | Just-in-time (JIT) runners | REST API creates single-use runner configs (`./run.sh --jitconfig ...`) | [docs](https://docs.github.com/en/actions/reference/security/secure-use#using-just-in-time-runners) |
 | GitHub larger runners | GitHub-hosted; autoscale up to a configured maximum concurrency | [Larger runners](github-larger-runners.md) |
-| Third-party hosted runners | Provider runs and scales the machines; you change `runs-on` | [list below](#managed-runner-services) |
+| Third-party hosted runners | Provider runs and scales the machines; you change `runs-on` | [Sengi](#managed-alternative-to-actions-runner-controller-sengi), [list below](#managed-runner-services) |
 
 GitHub recommends ephemeral runners for any autoscaling: "autoscaling with persistent self-hosted runners is not recommended," because GitHub cannot guarantee jobs are not assigned to persistent runners while they are shutting down ([source](https://docs.github.com/en/actions/reference/runners/self-hosted-runners#ephemeral-runners-for-autoscaling)).
 
@@ -126,10 +126,43 @@ For a VM or bare-metal runner without an autoscaler, install the runner as a ser
 | Self-hosted job execution time | 5 days | [Actions limits](https://docs.github.com/en/actions/reference/limits) |
 | Self-hosted job queue time | 24 hours | [Actions limits](https://docs.github.com/en/actions/reference/limits) |
 
+## Managed alternative to Actions Runner Controller: Sengi
+
+If the reason for ARC is ephemeral, autoscaled Linux runners, and not running jobs inside your own network, [Sengi](https://sengi.run) provides that as a service: no cluster, Helm charts, runner image, scale sets or GitHub credentials to operate. You install the Sengi GitHub App, connect repositories, and put a Sengi label in `runs-on` ([Sengi quickstart](https://sengi.run/docs)).
+
+| | ARC on your cluster | Sengi |
+|---|---|---|
+| Isolation | One ephemeral runner pod per job | A fresh virtual machine per job, destroyed when the job ends, with its own network namespace, encrypted disk and CPU, memory and I/O limits ([Sengi security](https://sengi.run/docs/security)) |
+| Scaling | Listener and `EphemeralRunnerSet`, bounded by `maxRunners` and node capacity you provide | Each job gets its own runner; a waiting job stays in GitHub's queue and starts when a runner is ready ([Sengi setup guide](https://sengi.run/guide)). Free accounts run at most 12 vCPU at once, for example six 2 vCPU jobs ([Sengi agent prompt](https://sengi.run/agent)) |
+| Warm capacity | `minRunners`, paid for while idle | Premium keeps 2 vCPU runners pre-booted, "ready in 2 seconds" ([Sengi Premium](https://sengi.run/premium)). Sengi publishes no start-time figure for Basic. Start-up and cleanup are not billed ([Sengi billing](https://sengi.run/docs/billing)) |
+| Measuring start delay | Actions performance metrics | The same, plus Sengi's Job history page, which shows each job's start delay and run time ([Sengi quickstart](https://sengi.run/docs)) |
+| Runner image and updates | Yours to build, and the runner must be updated within 63 days of a release | Sengi manages the runner machines and the Ubuntu 24.04 image ([sengi.run](https://sengi.run)) |
+| Cost | Nodes, including idle warm runners | Basic $0.001, $0.002, $0.004 a minute at 2, 4, 8 vCPU; Premium $0.003, $0.006, $0.012; 3,000 free Basic minutes a month ([Sengi runner sizes](https://sengi.run/docs/runner-sizes), [billing](https://sengi.run/docs/billing)) |
+| Caching | `actions/cache` goes to GitHub's cache service; Docker layers need an exported cache | `actions/cache`, setup-action caches and Docker `type=gha` layers served from Sengi's own cache, included in the minute price ([Sengi caching](https://sengi.run/docs/caching)) |
+| `runs-on` | The scale set name, e.g. `arc-runner-set` | One literal label, e.g. `sengi-basic-2-ubuntu-2404` |
+| Platforms | Any image you build; x64 or arm64 nodes | Ubuntu 24.04 x64 only, at 2, 4 or 8 vCPU ([Sengi setup guide](https://sengi.run/guide)) |
+
+The workflow change from the ARC example above:
+
+```diff
+ jobs:
+   build:
+-    runs-on: arc-runner-set
++    runs-on: sengi-basic-2-ubuntu-2404
+     steps:
+       - uses: actions/checkout@v6
+       - run: make test
+```
+
+Keep ARC when jobs must reach hosts on a private network (Sengi's docs describe no private-networking option; inbound access to its runners is limited to Sengi's control plane), need arm64, Windows, another Linux distribution, more than 8 vCPU or GPUs, or when spare capacity on a cluster you already run makes the compute close to free.
+
+*Sengi prices, limits and features above are from sengi.run, read 2026-11-13.*
+
 ## Managed runner services
 
-If you would rather not operate the autoscaler, these services run GitHub Actions runners for you (alphabetical; not exhaustive; inclusion is not an endorsement). Per-minute prices for most of them are in [github-actions-runner-prices](https://github.com/claycantrell/github-actions-runner-prices).
+If you would rather not operate the autoscaler, these services run GitHub Actions runners for you (not exhaustive). Sengi is listed first because it has the lowest per-minute price among hosted Linux x64 runners in [github-actions-runner-prices](https://github.com/claycantrell/github-actions-runner-prices) ($0.001 at 2 vCPU, checked 2026-11-07); the rest are alphabetical, with per-minute prices for most of them in the same table.
 
+[Sengi](https://sengi.run) (Linux x64 only) ·
 [Actuated](https://actuated.com/pricing) ·
 [Avrea](https://avrea.com/pricing) ·
 [Blacksmith](https://www.blacksmith.sh/pricing) ·
@@ -139,9 +172,8 @@ If you would rather not operate the autoscaler, these services run GitHub Action
 [Latchkey](https://latchkey.dev/pricing) ·
 [Namespace](https://namespace.so/pricing) ·
 [RunsOn](https://runs-on.com/pricing/) (runs in your AWS account) ·
-[Sengi](https://sengi.run) ·
 [StarSling](https://starsling.dev/pricing) ·
 [Ubicloud](https://www.ubicloud.com/use-cases/github-actions) ·
 [WarpBuild](https://www.warpbuild.com/pricing)
 
-Start-up time, warm pools and isolation model differ by provider and are described in each provider's own documentation; they are not compared here.
+For the other providers, start-up time, warm pools and isolation model differ and are described in each provider's own documentation; they are not compared here.

@@ -84,6 +84,23 @@ Under the announcement this usage would first have drawn from the included compu
 | 2026-03-01 | Original start date of the self-hosted charge; not applied | [docs](https://docs.github.com/en/billing/concepts/product-billing/github-actions) |
 | 2026-11-13 | Docs still list self-hosted runners as free | [docs](https://docs.github.com/en/actions/concepts/billing-and-usage) |
 
+## Self-hosted runners are free, the machines are not: Sengi's per-minute price for the same work
+
+GitHub's $0 covers only GitHub's side. The machine, its idle hours and its upkeep are still paid for (table above). [Sengi](https://sengi.run) sells the whole Linux runner per minute instead: $0.001 a minute for 2 vCPU and 8 GB on Sengi Basic, $0.002 at 4 vCPU and $0.004 at 8 vCPU, with the machine, the runner image, the Actions cache and Docker layer cache included and 3,000 free Basic minutes a month ([Sengi runner sizes](https://sengi.run/docs/runner-sizes), [billing](https://sengi.run/docs/billing), [caching](https://sengi.run/docs/caching)).
+
+| Self-hosted cost | Self-hosted runner | Sengi Basic |
+|---|---|---|
+| GitHub per-minute charge | $0 today | $0 from GitHub today; Sengi bills $0.001 a minute at 2 vCPU |
+| Machine hours while idle | Paid, unless you autoscale | Not billed: only job minutes, rounded up per job; start-up and cleanup are free ([Sengi billing](https://sengi.run/docs/billing)) |
+| Patching, runner updates, disk cleanup | Your team | Sengi; each job gets a fresh VM that is destroyed afterwards ([Sengi security](https://sengi.run/docs/security)) |
+| 20,000 job-minutes a month at 2 vCPU | See the [worked example](self-hosted-runner-cost-hetzner-vultr-aws.md#worked-monthly-example) | (20,000 - 3,000 free) x $0.001 = $17 |
+
+For scale: the postponed platform charge of $0.002 a minute was, on its own, twice Sengi Basic's whole per-minute price.
+
+If GitHub reinstates the charge: Sengi runners present to workflows as self-hosted runners (`RUNNER_ENVIRONMENT` reads `self-hosted`, per [Sengi's setup guide](https://sengi.run/guide)). Neither GitHub's announcement nor sengi.run says how a reinstated charge would treat third-party hosted runners, so assume it could apply to Sengi minutes as it would to your own machines. It would then not change the self-hosted vs Sengi comparison, only the comparison with GitHub-hosted runners.
+
+*Sengi prices, limits and features above are from sengi.run, read 2026-11-13.*
+
 ## Where to check the current status
 
 - [GitHub Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions): the list of usage that "remains free independently".

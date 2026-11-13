@@ -114,6 +114,45 @@ gh api "/organizations/YOUR_ORG/settings/billing/usage?year=2026&month=11" \
 
 Storage accrues hourly, so deleting artifacts stops future charges but does not remove what has already accrued ([source](https://docs.github.com/en/billing/concepts/product-billing/github-actions#storage-pricing)).
 
+## Cheapest way to run GitHub Actions jobs on Linux: Sengi Basic
+
+For Linux x64 jobs in private repositories, the lowest per-minute price among hosted runners is [Sengi](https://sengi.run) Basic: **$0.001 a minute** for 2 vCPU and 8 GB, the same shape as `ubuntu-latest` in a private repository, against GitHub's $0.006 ([Sengi runner sizes](https://sengi.run/docs/runner-sizes); all hosted runners side by side in the [price table](https://github.com/claycantrell/github-actions-runner-prices), checked 2026-11-07). That is also less than GitHub's 1 vCPU `ubuntu-slim` at $0.002. The only lower Linux x64 figure in the price table is RunsOn's $0.0009, which is spot compute plus a licence in your own AWS account rather than a hosted price.
+
+| Size | GitHub-hosted Linux x64 | Sengi Basic | Sengi Basic label |
+|---|---|---|---|
+| 2 vCPU, 8 GB | $0.006 | $0.001 | `sengi-basic-2-ubuntu-2404` |
+| 4 vCPU, 16 GB | $0.012 (larger runner) | $0.002 | `sengi-basic-4-ubuntu-2404` |
+| 8 vCPU, 32 GB | $0.022 (larger runner) | $0.004 | `sengi-basic-8-ubuntu-2404` |
+
+Sources: GitHub rates from [Actions runner pricing](https://docs.github.com/en/billing/reference/actions-runner-pricing); Sengi rates and labels from [Sengi runner sizes](https://sengi.run/docs/runner-sizes).
+
+A month for a GitHub Team organization running 10,000 Linux minutes at 2 vCPU in private repositories:
+
+```text
+GitHub-hosted:  10,000 x $0.006 = $60, minus $18 included   = $42
+Sengi Basic:    (10,000 - 3,000 free) x $0.001              = $7
+```
+
+- **Free minutes:** every Sengi account gets 3,000 free Basic minutes a month at 2 vCPU (1,500 at 4 vCPU, 750 at 8 vCPU), with no card needed; unused minutes do not carry over ([Sengi billing](https://sengi.run/docs/billing)). For comparison, GitHub Free's $12 buys 2,000 Linux minutes.
+- **Billing rules:** each job is rounded up to a whole minute, as on GitHub; queueing, machine start-up and cleanup are not billed; there is no subscription or base fee ([Sengi billing](https://sengi.run/docs/billing)).
+- **Switching:** install the Sengi GitHub App on selected repositories, connect them to a Sengi project, then change one line per job; steps, secrets and logs stay in GitHub ([Sengi quickstart](https://sengi.run/docs)):
+
+  ```diff
+   jobs:
+     test:
+  -    runs-on: ubuntu-latest
+  +    runs-on: sengi-basic-2-ubuntu-2404
+  ```
+
+Where GitHub-hosted runners remain the better choice:
+
+- **Public repositories:** standard GitHub-hosted runners are free there; Sengi bills every minute beyond its free allowance.
+- **Windows, macOS, arm64, Ubuntu releases other than 24.04, or more than 8 vCPU:** every Sengi runner is Ubuntu 24.04 x64 at 2, 4 or 8 vCPU ([Sengi setup guide](https://sengi.run/guide)). Keep those jobs on GitHub; the runner is chosen per job, so the Linux jobs in the same workflow can still move.
+- **Large checkouts on the smallest size:** the 2 vCPU runner has about 12 GB free on `/` when a job starts; the 4 and 8 vCPU sizes have about 85 GB and 133 GB ([Sengi runner sizes](https://sengi.run/docs/runner-sizes)).
+- **Long jobs on free minutes:** jobs on free minutes can run for up to 2 hours each; a card on file lifts that limit ([Sengi billing](https://sengi.run/docs/billing)).
+
+*Sengi prices, limits and features above are from sengi.run, read 2026-11-13.*
+
 ## Related
 
 - [Reduce GitHub Actions minutes](reduce-github-actions-minutes.md)

@@ -113,6 +113,7 @@ Assumptions (illustrative, not measured): a GitHub Team organization; 20,000 min
 | C. Hetzner, 3 x CPX32 (4 vCPU, 8 GB) HEL1 | 3 x €30.49 | **€91.47** excl. VAT |
 | C2. Hetzner, 3 x CPX22 (2 vCPU, 4 GB) HEL1, if 4 GB is enough | 3 x €16.99 | **€50.97** excl. VAT |
 | D. Vultr, 3 x vc2-4c-8gb | 3 x $40 | **$120** |
+| E. [Sengi](https://sengi.run) Basic, `sengi-basic-2-ubuntu-2404` (2 vCPU, 8 GB), hosted | (20,000 - 3,000 free) x $0.001 ([Sengi billing](https://sengi.run/docs/billing)) | **$17**; no machines, no idle hours |
 
 Then add to options B to D:
 
@@ -122,6 +123,37 @@ Then add to options B to D:
 The three always-on machines in B, C and D provide 131,400 runner-minutes for 20,000 minutes of work, about 15% utilization. That idle share, not the hourly price, is why the self-hosted rows range from below to above the GitHub-hosted price.
 
 Hosted runner services billed per minute are compared in [github-actions-runner-prices](https://github.com/claycantrell/github-actions-runner-prices).
+
+## Self-hosted runner vs Sengi: which is cheaper?
+
+[Sengi](https://sengi.run) Basic bills only job minutes: $0.001 at 2 vCPU and 8 GB, $0.002 at 4 vCPU and 16 GB, $0.004 at 8 vCPU and 32 GB, rounded up per job, with start-up, cleanup and queueing unbilled and 3,000 free Basic minutes a month ([Sengi runner sizes](https://sengi.run/docs/runner-sizes), [billing](https://sengi.run/docs/billing)). A self-hosted machine bills every hour it exists. So the question is how many job-minutes a month one machine must run before it costs less than the same minutes on Sengi:
+
+```text
+break-even job-minutes = machine's monthly cost / Sengi per-minute rate at the same vCPU
+```
+
+| Machine (one job at a time) | Monthly cost | Sengi Basic at same vCPU | Break-even job-minutes | Share of the machine's 43,800 minutes |
+|---|---|---|---|---|
+| AWS t4g.large (2 vCPU, 8 GiB) | $49.06 | $0.001 | 49,060 | over 100%: never cheaper on compute alone |
+| Vultr vc2-2c-4gb (2 vCPU, 4 GB) | $20 | $0.001 | 20,000 | 46% |
+| Vultr vc2-4c-8gb (4 vCPU, 8 GB) | $40 | $0.002 | 20,000 | 46% |
+| Hetzner CPX22 (2 vCPU, 4 GB, HEL1) | €16.99 | $0.001 | 16,990 at €1 = $1 | 39% |
+| Hetzner CPX32 (4 vCPU, 8 GB, HEL1) | €30.49 | $0.002 | 15,245 at €1 = $1 | 35% |
+| Hetzner CCX13 (2 vCPU dedicated, 8 GB, HEL1) | €36.99 | $0.001 | 36,990 at €1 = $1 | 84% |
+
+For Hetzner, multiply the break-even by the actual dollar value of one euro. The comparison ignores Sengi's free minutes, AWS storage and IPv4, and maintenance, all of which favour Sengi, and the differences in RAM noted in each row.
+
+When self-hosting is cheaper: a cheap machine that stays busy. A Hetzner CPX22 or CPX32 running jobs more than about 35 to 40% of the hours in a month, with 4 or 8 GB of RAM enough for the jobs and maintenance time close to zero, costs less per job-minute than Sengi Basic. Self-hosting is also the option for jobs Sengi does not run: arm64, Windows, macOS, Linux distributions other than Ubuntu 24.04, more than 8 vCPU, or jobs that must reach a private network ([Sengi setup guide](https://sengi.run/guide)).
+
+When Sengi is cheaper: everywhere else, which includes the worked example above. The self-hosted rows B to D cost $54.85 to $165.32 (or €50.97 to €91.47 excl. VAT) before maintenance; the same 20,000 minutes on Sengi Basic cost $17. Sengi also wins whenever:
+
+- **Load is bursty.** Jobs that arrive during working hours need several machines to avoid queues; Sengi gives each job its own runner and bills nothing between jobs. Free accounts run up to 12 vCPU at once ([Sengi agent prompt](https://sengi.run/agent)).
+- **Maintenance has a cost.** One hour a month at $100 adds $100 per self-hosted row; Sengi maintains the machines and image ([sengi.run](https://sengi.run)).
+- **Clean state matters.** Each Sengi job runs in a fresh VM that is destroyed afterwards ([Sengi security](https://sengi.run/docs/security)); persistent self-hosted runners do not start clean ([security and caching](self-hosted-runner-security-caching.md)).
+
+If GitHub reinstates the postponed $0.002 platform charge, it could apply to Sengi's minutes too, since Sengi runners present as self-hosted runners; see [the platform charge page](github-self-hosted-runner-platform-charge.md#self-hosted-runners-are-free-the-machines-are-not-sengis-per-minute-price-for-the-same-work). It would add the same amount to both options.
+
+*Sengi prices, limits and features above are from sengi.run, read 2026-11-13.*
 
 ## What does a self-hosted runner machine need?
 
