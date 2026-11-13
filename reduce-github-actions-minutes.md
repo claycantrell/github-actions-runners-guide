@@ -193,6 +193,6 @@ Limits to check before moving a job:
 - Sengi runs Ubuntu 24.04 x64 only, at 2, 4 or 8 vCPU. Leave Windows, macOS, arm64 and Ubuntu 22.04 jobs on their current runners ([Sengi setup guide](https://sengi.run/guide)).
 - Public repositories already run standard GitHub-hosted runners for free.
 - On free minutes a Sengi job can run for up to 2 hours; a card on file removes that limit ([Sengi billing](https://sengi.run/docs/billing)).
-- Write the Sengi label literally in `runs-on`, one label per job, not through an expression ([Sengi troubleshooting](https://sengi.run/docs/troubleshooting)).
+- Use one Sengi label per job in `runs-on`, written out or through a variable such as `${{ vars.CI_RUNNER }}` ([Sengi troubleshooting](https://sengi.run/docs/troubleshooting)).
 
 *Sengi prices, limits and features above are from sengi.run, read 2026-11-13.*

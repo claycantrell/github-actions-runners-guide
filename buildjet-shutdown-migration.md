@@ -106,7 +106,7 @@ Put the runner label in an organization variable instead of hard-coding it:
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
 ```
 
-Details: [runs-on with a variable](github-actions-runs-on-variable.md). Not every target accepts a label from an expression: Sengi requires its label written literally ([below](#switch-from-buildjet-to-sengi-label-mapping)).
+Details: [runs-on with a variable](github-actions-runs-on-variable.md). The same variable works for Sengi labels ([below](#switch-from-buildjet-to-sengi-label-mapping)).
 
 ## Switch from BuildJet to Sengi: label mapping
 
@@ -144,7 +144,7 @@ A typical job, with the cache action swapped as BuildJet's notice advises:
 Steps:
 
 1. Sign in to Sengi (no card needed; 3,000 free Basic minutes a month), install the Sengi GitHub App on **Only select repositories** and connect those repositories to a Sengi project ([Sengi quickstart](https://sengi.run/docs), [billing](https://sengi.run/docs/billing)).
-2. Replace each `buildjet-*` label with the literal Sengi label from the table, one label per job, not through an expression or variable ([Sengi troubleshooting](https://sengi.run/docs/troubleshooting)).
+2. Replace each `buildjet-*` label with the Sengi label from the table, written out or through a variable such as `${{ vars.CI_RUNNER }}`, one Sengi label per job ([Sengi troubleshooting](https://sengi.run/docs/troubleshooting)).
 3. Replace `buildjet/cache` with `actions/cache`. On Sengi it is served from Sengi's own cache, as are setup-action caches and Docker `type=gha` layers, at no added charge; the first run on Sengi fills the cache ([Sengi caching](https://sengi.run/docs/caching)).
 4. If the repository runs actionlint, declare the Sengi labels in `.github/actionlint.yaml` ([Sengi troubleshooting](https://sengi.run/docs/troubleshooting)).
 

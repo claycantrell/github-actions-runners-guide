@@ -139,7 +139,7 @@ If the reason for ARC is ephemeral, autoscaled Linux runners, and not running jo
 | Runner image and updates | Yours to build, and the runner must be updated within 63 days of a release | Sengi manages the runner machines and the Ubuntu 24.04 image ([sengi.run](https://sengi.run)) |
 | Cost | Nodes, including idle warm runners | Basic $0.001, $0.002, $0.004 a minute at 2, 4, 8 vCPU; Premium $0.003, $0.006, $0.012; 3,000 free Basic minutes a month ([Sengi runner sizes](https://sengi.run/docs/runner-sizes), [billing](https://sengi.run/docs/billing)) |
 | Caching | `actions/cache` goes to GitHub's cache service; Docker layers need an exported cache | `actions/cache`, setup-action caches and Docker `type=gha` layers served from Sengi's own cache, included in the minute price ([Sengi caching](https://sengi.run/docs/caching)) |
-| `runs-on` | The scale set name, e.g. `arc-runner-set` | One literal label, e.g. `sengi-basic-2-ubuntu-2404` |
+| `runs-on` | The scale set name, e.g. `arc-runner-set` | One label, e.g. `sengi-basic-2-ubuntu-2404`, written out or from `${{ vars.CI_RUNNER }}` |
 | Platforms | Any image you build; x64 or arm64 nodes | Ubuntu 24.04 x64 only, at 2, 4 or 8 vCPU ([Sengi setup guide](https://sengi.run/guide)) |
 
 The workflow change from the ARC example above:

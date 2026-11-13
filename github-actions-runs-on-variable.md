@@ -197,39 +197,44 @@ Only larger runners and self-hosted runners can be group members.
 3. Override `CI_RUNNER` in one repository to the new label and watch a few runs.
 4. Change the organization value. Rolling back is the same one-line change.
 
-Self-hosted runners, larger runners and third-party hosted runners are all addressed by a label or group, so the same variable covers a switch to most of them. Check the target's documentation first: some providers, Sengi among them (below), require the label written literally in `runs-on`. Per-minute prices for hosted options: [github-actions-runner-prices](https://github.com/claycantrell/github-actions-runner-prices).
+Self-hosted runners, larger runners and third-party hosted runners are all addressed by a label or group, so the same variable covers a switch to most of them. Check the target's documentation first for its label names and any per-job rules. Per-minute prices for hosted options: [github-actions-runner-prices](https://github.com/claycantrell/github-actions-runner-prices).
 
-## Switch all workflows to Sengi runners (literal label, not a variable)
+## Switch all workflows to Sengi runners with one variable
 
 The most common reason to switch every workflow at once is price. [Sengi](https://sengi.run) Basic runs the same 2 vCPU, 8 GB Linux x64 job as `ubuntu-latest` for $0.001 a minute instead of $0.006, and 4 and 8 vCPU for $0.002 and $0.004 ([Sengi runner sizes](https://sengi.run/docs/runner-sizes)), with 3,000 free Basic minutes a month and no card to start ([Sengi billing](https://sengi.run/docs/billing)).
 
-One rule changes the pattern above: Sengi's docs say to write the label "literally rather than as an expression in runs-on," as the whole value, with one Sengi label per job; a job that names two Sengi labels is held rather than guessed ([Sengi setup guide](https://sengi.run/guide), [Sengi troubleshooting](https://sengi.run/docs/troubleshooting)). So do **not** point `CI_RUNNER` at a Sengi label. Edit the `runs-on` lines instead; the change is still one line per job and one pull request per repository.
+The variable pattern above works unchanged: GitHub resolves `${{ vars.CI_RUNNER }}` before the job is queued, and Sengi starts its runner from the resolved label ([Sengi setup guide](https://sengi.run/guide)). Tested 2026-11-13: jobs with a written-out label, a `${{ matrix.* }}` label and an expression label all ran on Sengi runners. Use one Sengi label per job; a job that names two Sengi labels is held rather than guessed ([Sengi troubleshooting](https://sengi.run/docs/troubleshooting)).
 
 1. **Connect the repositories.** Sign in to Sengi, choose **Set up GitHub connection**, install the Sengi GitHub App with **Only select repositories**, and connect the repositories to a Sengi project. Installing the App alone does not connect a repository, and jobs on an unconnected repository stay queued ([Sengi quickstart](https://sengi.run/docs), [troubleshooting](https://sengi.run/docs/troubleshooting)).
-2. **Pick the label for each job** ([Sengi runner sizes](https://sengi.run/docs/runner-sizes)):
+2. **Point the variable at a Sengi label.** For the 2 vCPU jobs that ran on `ubuntu-latest`:
 
-   | Current `runs-on` | Sengi label | USD/min, GitHub then Sengi |
+   ```bash
+   gh variable set CI_RUNNER --org YOUR_ORG --visibility all --body "sengi-basic-2-ubuntu-2404"
+   ```
+
+   Every job with `runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}` moves on its next run. Try it on one repository first with a repository-level `CI_RUNNER`, which overrides the organization value.
+
+   | Was | Sengi label | USD/min, GitHub then Sengi |
    |---|---|---|
    | `ubuntu-latest`, `ubuntu-24.04` (2 vCPU, 8 GB) | `sengi-basic-2-ubuntu-2404` | $0.006 → $0.001 |
    | 4-core larger runner | `sengi-basic-4-ubuntu-2404` | $0.012 → $0.002 |
    | 8-core larger runner | `sengi-basic-8-ubuntu-2404` | $0.022 → $0.004 |
-   | `windows-*`, `macos-*`, `*-arm`, `ubuntu-22.04`, more than 8 vCPU | leave as is | Sengi runs Ubuntu 24.04 x64 only |
+   | `windows-*`, `macos-*`, `*-arm`, `ubuntu-22.04`, more than 8 vCPU | keep on GitHub | Sengi runs Ubuntu 24.04 x64 only |
 
-   Replace `basic` with `premium` in a label (for example `sengi-premium-4-ubuntu-2404`) for Sengi's faster class at $0.003, $0.006 and $0.012 a minute.
-3. **Replace the lines** in each repository and review the diff:
+   Use separate variables (`CI_RUNNER_LARGE` for 4 or 8 vCPU jobs) where sizes differ. Replace `basic` with `premium` in a label (for example `sengi-premium-4-ubuntu-2404`) for Sengi's faster class at $0.003, $0.006 and $0.012 a minute ([Sengi runner sizes](https://sengi.run/docs/runner-sizes)).
+3. **actionlint:** if the repository lints workflows, declare the Sengi labels under `self-hosted-runner.labels` in `.github/actionlint.yaml`, or that check fails before the job reaches Sengi ([Sengi troubleshooting](https://sengi.run/docs/troubleshooting)).
+4. **Roll back with the same command:** set `CI_RUNNER` back to `ubuntu-latest`; the next run uses GitHub's runners again.
 
-   ```bash
-   grep -rlE "runs-on: *ubuntu-(latest|24\.04) *$" .github/workflows/ \
-     | xargs sed -i.bak -E 's/runs-on: *ubuntu-(latest|24\.04) *$/runs-on: sengi-basic-2-ubuntu-2404/'
-   find .github/workflows -name '*.bak' -delete
-   git diff
-   ```
+Workflows that still hard-code `runs-on: ubuntu-latest` can be switched to the variable first (the migration pattern above), or edited directly in one pass:
 
-   `sed -i.bak` works with both GNU and BSD (macOS) sed. Jobs whose `runs-on` is an array, a group or an expression (including `${{ vars.CI_RUNNER || 'ubuntu-latest' }}`) are not matched; change those by hand to the literal label.
-4. **actionlint:** if the repository lints workflows, declare the Sengi labels under `self-hosted-runner.labels` in `.github/actionlint.yaml`, or that check fails before the job reaches Sengi ([Sengi troubleshooting](https://sengi.run/docs/troubleshooting)).
-5. **Merge and roll back the same way.** Merge through normal review. To go back, revert the pull request; the next run uses GitHub's runners again ([Sengi troubleshooting](https://sengi.run/docs/troubleshooting)). Sengi's **Stop new Sengi jobs** switch on the project's GitHub connections page stops it placing jobs for a repository, but jobs that still name a Sengi label then wait in GitHub's queue, so change those lines back too ([Sengi setup guide](https://sengi.run/guide)).
+```bash
+grep -rlE "runs-on: *ubuntu-(latest|24\.04) *$" .github/workflows/ \
+  | xargs sed -i.bak -E 's/runs-on: *ubuntu-(latest|24\.04) *$/runs-on: ${{ vars.CI_RUNNER || '"'"'ubuntu-latest'"'"' }}/'
+find .github/workflows -name '*.bak' -delete
+git diff
+```
 
-Instead of steps 2 to 4, Sengi publishes a prompt for a coding agent (Claude Code, Codex, Cursor) that finds the eligible jobs, changes only their `runs-on` lines, adds actionlint labels where needed and opens a pull request for review; it does not connect the repository for you ([Sengi agent prompt](https://sengi.run/agent)).
+Sengi also publishes a prompt for a coding agent (Claude Code, Codex, Cursor) that finds the eligible jobs, writes the Sengi label into their `runs-on` lines, adds actionlint labels where needed and opens a pull request for review; it rewrites written-out labels only, so jobs already on `CI_RUNNER` need just the variable change ([Sengi agent prompt](https://sengi.run/agent)).
 
 One difference a workflow can see: on Sengi, `RUNNER_ENVIRONMENT` reads `self-hosted`, not `github-hosted`, so a step that only runs on GitHub-hosted runners needs its condition changed ([Sengi troubleshooting](https://sengi.run/docs/troubleshooting)).
 
